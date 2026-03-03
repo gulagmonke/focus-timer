@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>get on the grind.</title>
+<title>Focus Timer</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
@@ -295,10 +295,10 @@ body {
     <div class="chart-box">
       <div class="chart-header">
         <div class="chart-title">Cumulative Minutes</div>
-        <div class="chart-sub">all users · all time</div>
+        <div class="chart-sub">all scholars · all time</div>
       </div>
       <div id="globalChartWrap">
-        <div class="chart-empty" id="globalChartEmpty">Chart builds as users log sessions...</div>
+        <div class="chart-empty" id="globalChartEmpty">Chart builds as scholars log sessions...</div>
         <canvas id="globalChart" height="120" style="display:none"></canvas>
       </div>
     </div>
@@ -319,18 +319,17 @@ function saveLifetime(m) { localStorage.setItem(LIFETIME_KEY,String(m)); }
 function getSessions() { try { return JSON.parse(localStorage.getItem(SESSIONS_KEY)||'[]'); } catch { return []; } }
 function saveSessions(s) { localStorage.setItem(SESSIONS_KEY,JSON.stringify(s)); }
 
-// ── JSONBin config — fill these in ────────────────────────────────────────────
-const JSONBIN_BIN_ID  = '69a76ae0d0ea881f40ebfd61';
-const JSONBIN_API_KEY = 'Y$2a$10$USN2XfHIYfcmLA6zG1RfZeqIEtz7dNxJMW29stolGHWBLwUqn0D22';
-const JSONBIN_URL     = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
+// ── Firebase config — fill in your project URL ─────────────────────────────
+// 1. Go to console.firebase.google.com → create project → Realtime Database
+// 2. Create database → start in TEST MODE (allows public read/write)
+// 3. Copy your database URL below (looks like https://YOUR-PROJECT.firebaseio.com)
+const FIREBASE_URL = 'https://focus-app-dd888-default-rtdb.firebaseio.com/';
 
 async function fetchGlobalData() {
   try {
-    const r = await fetch(JSONBIN_URL+'/latest', {
-      headers: { 'X-Master-Key': JSONBIN_API_KEY }
-    });
-    const json = await r.json();
-    return json.record || { total: 0, days: {} };
+    const r = await fetch(FIREBASE_URL + '/global.json');
+    const data = await r.json();
+    return data || { total: 0, days: {} };
   } catch { return { total: 0, days: {} }; }
 }
 
@@ -347,15 +346,13 @@ async function getGlobalDays() {
 async function addGlobal(mins) {
   try {
     const data = await fetchGlobalData();
-    const today = new Date().toISOString().slice(0,10);
+    const today = new Date().toISOString().slice(0, 10);
     data.total = (data.total || 0) + mins;
+    data.days = data.days || {};
     data.days[today] = (data.days[today] || 0) + mins;
-    await fetch(JSONBIN_URL, {
+    await fetch(FIREBASE_URL + '/global.json', {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN_API_KEY
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
   } catch {}
