@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Focus Timer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  min-height: 100vh;
+  background: linear-gradient(160deg, #0f0f1a 0%, #12101e 40%, #0a0f1e 100%);
+  font-family: 'DM Sans', sans-serif;
+  color: #fff;
+  padding-bottom: 48px;
+  position: relative;
+  overflow-x: hidden;
+}
+.ambient {
+  position: fixed; top: -80px; left: 50%; transform: translateX(-50%);
+  width: 440px; height: 440px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%);
+  pointer-events: none; transition: background 1.5s; z-index: 0;
+}
+.wrap { position: relative; z-index: 1; max-width: 480px; margin: 0 auto; padding: 0 24px; }
+
+/* Header */
+.header { padding: 32px 0 0; text-align: center; }
+.header-sub { font-size: 11px; letter-spacing: 4px; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+.header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; background: linear-gradient(135deg, #fff 60%, rgba(255,255,255,0.4)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* Stats strip */
+.stats-strip { display: flex; justify-content: center; align-items: center; gap: 20px; margin: 18px 0 4px; }
+.stat-item { text-align: center; }
+.stat-val { font-family: 'DM Mono', monospace; font-size: 17px; font-weight: 700; color: #fff; }
+.stat-lbl { font-size: 9px; color: rgba(255,255,255,0.3); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 1px; }
+.stat-div { width: 1px; height: 28px; background: rgba(255,255,255,0.08); }
+
+/* Gauge */
+.gauge-wrap { position: relative; width: 220px; height: 220px; margin: 14px auto 0; cursor: pointer; }
+.gauge-svg { transform: rotate(-148deg); }
+.gauge-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 2px; pointer-events: none;
+}
+.gauge-emoji { font-size: 30px; line-height: 1; }
+.gauge-time { font-family: 'DM Mono', monospace; font-size: 34px; font-weight: 700; color: #fff; line-height: 1; letter-spacing: -1px; }
+.gauge-sub { font-size: 10px; color: rgba(255,255,255,0.35); letter-spacing: 2px; text-transform: uppercase; margin-top: 2px; }
+.gauge-label { font-size: 12px; font-weight: 600; margin-top: 4px; }
+
+/* Controls */
+.controls { display: flex; gap: 10px; justify-content: center; margin-top: 14px; min-height: 44px; align-items: center; }
+.btn { border-radius: 12px; padding: 10px 24px; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; border: 1px solid; transition: background 0.15s; }
+.btn-pause { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.12); color: #fff; }
+.btn-pause:hover { background: rgba(255,255,255,0.12); }
+.btn-end { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.25); color: #fca5a5; }
+.btn-end:hover { background: rgba(248,113,113,0.18); }
+
+/* Quick cards */
+.quick-cards { display: flex; gap: 10px; margin: 18px 0 0; }
+.quick-card {
+  flex: 1; background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px; padding: 14px 8px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  transition: background 0.15s; text-align: center;
+}
+.quick-card:hover { background: rgba(255,255,255,0.1); }
+.quick-card .qc-icon { font-size: 22px; }
+.quick-card .qc-label { font-size: 11px; font-weight: 600; color: #fff; }
+.quick-card .qc-mins { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.4); }
+
+/* Tabs */
+.tabs { display: flex; margin: 18px 0 0; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 4px; }
+.tab-btn { flex: 1; padding: 8px 0; border: none; border-radius: 9px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 13px; letter-spacing: 0.3px; transition: all 0.2s; background: transparent; color: rgba(255,255,255,0.4); }
+.tab-btn.active { background: rgba(255,255,255,0.12); color: #fff; }
+
+/* Tab panes */
+.pane { display: none; padding: 16px 0 0; }
+.pane.active { display: block; }
+
+/* Duration picker */
+.picker { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 20px 20px 16px; margin-top: 14px; }
+.picker-title { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.35); margin-bottom: 14px; text-align: center; font-family: 'DM Mono', monospace; }
+.preset-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 14px; }
+.preset-btn { background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 9px 4px; color: #fff; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; transition: background 0.15s; }
+.preset-btn:hover { background: rgba(255,255,255,0.13); }
+.custom-row { display: flex; gap: 8px; }
+.custom-input { flex: 1; background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 9px 12px; color: #fff; font-family: 'DM Mono', monospace; font-size: 13px; outline: none; }
+.custom-input::placeholder { color: rgba(255,255,255,0.25); }
+.custom-input::-webkit-outer-spin-button, .custom-input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.btn-start-custom { background: rgba(250,204,21,0.15); border: 1px solid rgba(250,204,21,0.3); border-radius: 10px; padding: 9px 16px; color: #facc15; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 13px; transition: background 0.15s; }
+.btn-start-custom:hover { background: rgba(250,204,21,0.25); }
+.btn-cancel { margin-top: 10px; width: 100%; padding: 7px 0; background: none; border: none; color: rgba(255,255,255,0.25); cursor: pointer; font-size: 12px; font-family: 'DM Sans', sans-serif; }
+.btn-custom-open { margin-top: 10px; width: 100%; padding: 11px 0; background: rgba(250,204,21,0.08); border: 1px solid rgba(250,204,21,0.2); border-radius: 12px; color: #facc15; font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 13px; cursor: pointer; transition: background 0.15s; }
+.btn-custom-open:hover { background: rgba(250,204,21,0.15); }
+.running-quote { text-align: center; padding: 16px 0; color: rgba(255,255,255,0.18); font-size: 12px; font-style: italic; font-family: 'DM Mono', monospace; }
+
+/* Stat cards 2x2 */
+.stat-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.stat-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 14px 16px; }
+.sc-icon { font-size: 20px; margin-bottom: 6px; }
+.sc-val { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 700; line-height: 1; }
+.sc-lbl { font-size: 10px; color: rgba(255,255,255,0.35); letter-spacing: 1.5px; text-transform: uppercase; margin-top: 4px; }
+
+/* Chart box */
+.chart-box { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 16px; padding: 16px 12px 10px; margin-bottom: 16px; }
+.chart-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.chart-title { font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.3); font-family: 'DM Mono', monospace; }
+.chart-sub { font-size: 10px; color: rgba(255,255,255,0.18); font-family: 'DM Mono', monospace; }
+.chart-empty { height: 100px; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.15); font-size: 12px; font-family: 'DM Mono', monospace; text-align: center; }
+
+/* Session history */
+.section-label { font-size: 10px; letter-spacing: 2.5px; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 8px; font-family: 'DM Mono', monospace; }
+.session-entry { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.se-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+.se-icon.complete { background: rgba(250,204,21,0.1); border: 1px solid rgba(250,204,21,0.25); }
+.se-icon.partial  { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
+.se-body { flex: 1; min-width: 0; }
+.se-top { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.se-name { font-size: 13px; font-weight: 600; color: #fff; }
+.se-time { font-family: 'DM Mono', monospace; font-size: 11px; color: rgba(255,255,255,0.35); white-space: nowrap; margin-left: 8px; }
+.se-bar-track { height: 3px; background: rgba(255,255,255,0.07); border-radius: 2px; }
+.se-bar-fill { height: 100%; border-radius: 2px; }
+.se-bar-fill.complete { background: linear-gradient(90deg,#facc15,#f59e0b); }
+.se-bar-fill.partial  { background: linear-gradient(90deg,#94a3b8,#64748b); }
+.btn-load-more { margin-top: 12px; width: 100%; padding: 9px 0; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: rgba(255,255,255,0.45); font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 600; }
+.empty-msg { text-align: center; color: rgba(255,255,255,0.2); padding: 32px 0; font-size: 13px; }
+
+/* Daily breakdown rows */
+.day-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.day-date { font-family: 'DM Mono', monospace; font-size: 10px; color: rgba(255,255,255,0.3); width: 60px; flex-shrink: 0; }
+.day-track { flex: 1; height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; }
+.day-fill { height: 100%; background: linear-gradient(90deg,#4ade80,#22c55e); border-radius: 2px; transition: width 0.6s; }
+.day-val { font-family: 'DM Mono', monospace; font-size: 11px; color: #4ade80; width: 44px; text-align: right; flex-shrink: 0; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%) translateY(10px);
+  background: rgba(30,30,50,0.95); border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 40px; padding: 10px 22px; font-size: 13px; font-weight: 600;
+  color: #fff; backdrop-filter: blur(12px); white-space: nowrap;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4); z-index: 100;
+  opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="ambient" id="ambient"></div>
+
+<div class="wrap">
+  <!-- Header -->
+  <div class="header">
+    <h1>Focus Timer</h1>
+  </div>
+
+  <!-- Stats strip -->
+  <div class="stats-strip">
+    <div class="stat-item"><div class="stat-val" id="stripToday">0m</div><div class="stat-lbl">today</div></div>
+    <div class="stat-div"></div>
+    <div class="stat-item"><div class="stat-val" id="stripLifetime">0m</div><div class="stat-lbl">lifetime</div></div>
+  </div>
+
+  <!-- Gauge -->
+  <div class="gauge-wrap" id="gaugeWrap" onclick="handleGaugeClick()">
+    <svg class="gauge-svg" width="220" height="220" viewBox="0 0 220 220">
+      <circle id="trackCircle" cx="110" cy="110" r="88" fill="none"
+        stroke="rgba(255,255,255,0.06)" stroke-width="14"
+        stroke-dasharray="453.3 99.7" stroke-dashoffset="-55.3"
+        stroke-linecap="round"/>
+      <circle id="progressCircle" cx="110" cy="110" r="88" fill="none"
+        stroke="#94a3b8" stroke-width="14"
+        stroke-dasharray="0 553"
+        stroke-dashoffset="-55.3"
+        stroke-linecap="round"
+        style="filter:drop-shadow(0 0 10px #94a3b899);transition:stroke-dasharray 1s linear,stroke 0.5s"/>
+    </svg>
+    <div class="gauge-center">
+      <div class="gauge-emoji" id="gaugeEmoji">⏱️</div>
+      <div class="gauge-time" id="gaugeTime" style="color:rgba(255,255,255,0.25)">—</div>
+      <div class="gauge-sub" id="gaugeSub">tap to start</div>
+      <div class="gauge-label" id="gaugeLabel" style="color:#94a3b8"></div>
+    </div>
+  </div>
+
+  <!-- Timer controls (hidden when not running) -->
+  <div class="controls" id="controls" style="visibility:hidden">
+    <button class="btn btn-pause" id="pauseBtn" onclick="togglePause()">Pause</button>
+    <button class="btn btn-end" onclick="endEarly()">End Session</button>
+  </div>
+
+  <!-- Quick start cards -->
+  <div class="quick-cards" id="quickCards">
+    <div class="quick-card" onclick="startTimer(5)">
+      <div class="qc-icon">⚡</div>
+      <div class="qc-label">Quick</div>
+      <div class="qc-mins">5 min</div>
+    </div>
+    <div class="quick-card" onclick="startTimer(15)">
+      <div class="qc-icon">🌱</div>
+      <div class="qc-label">Focus</div>
+      <div class="qc-mins">15 min</div>
+    </div>
+    <div class="quick-card" onclick="startTimer(30)">
+      <div class="qc-icon">🔥</div>
+      <div class="qc-label">Deep Work</div>
+      <div class="qc-mins">30 min</div>
+    </div>
+  </div>
+
+  <!-- Custom picker (hidden by default) -->
+  <div class="picker" id="pickerBox" style="display:none">
+    <div class="picker-title">Set Duration</div>
+    <div class="preset-grid">
+      <button class="preset-btn" onclick="startTimer(25)">25m</button>
+      <button class="preset-btn" onclick="startTimer(45)">45m</button>
+      <button class="preset-btn" onclick="startTimer(60)">60m</button>
+      <button class="preset-btn" onclick="startTimer(90)">90m</button>
+      <button class="preset-btn" onclick="startTimer(120)">120m</button>
+      <button class="preset-btn" onclick="startTimer(180)">180m</button>
+    </div>
+    <div class="custom-row">
+      <input class="custom-input" type="number" min="1" max="480" placeholder="Custom mins" id="customInput" onkeydown="if(event.key==='Enter')startCustom()">
+      <button class="btn-start-custom" onclick="startCustom()">Start</button>
+    </div>
+    <button class="btn-cancel" onclick="closePicker()">Cancel</button>
+  </div>
+
+  <!-- Custom button (shown when not running and picker closed) -->
+  <button class="btn-custom-open" id="customOpenBtn" onclick="openPicker()">Custom Duration</button>
+
+  <!-- Running quote -->
+  <div class="running-quote" id="runningQuote" style="display:none"></div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('stats',this)">My Stats</button>
+    <button class="tab-btn" onclick="switchTab('global',this)">Global</button>
+  </div>
+
+  <!-- My Stats pane -->
+  <div class="pane active" id="pane-stats">
+    <div class="stat-cards">
+      <div class="stat-card">
+        <div class="sc-icon">🏆</div>
+        <div class="sc-val" id="sc-lifetime" style="color:#facc15">0m</div>
+        <div class="sc-lbl">Lifetime Focus</div>
+      </div>
+      <div class="stat-card">
+        <div class="sc-icon">📅</div>
+        <div class="sc-val" id="sc-today" style="color:#4ade80">0m</div>
+        <div class="sc-lbl">Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="sc-icon">🎯</div>
+        <div class="sc-val" id="sc-sessions" style="color:#a78bfa">—</div>
+        <div class="sc-lbl">Sessions</div>
+      </div>
+      <div class="stat-card">
+        <div class="sc-icon">📊</div>
+        <div class="sc-val" id="sc-avg" style="color:#fb923c">—</div>
+        <div class="sc-lbl">Avg Session</div>
+      </div>
+    </div>
+
+    <div class="chart-box">
+      <div class="chart-title">Last 14 Days</div>
+      <canvas id="personalChart" height="90"></canvas>
+    </div>
+
+    <div class="section-label">Session History</div>
+    <div id="sessionList"></div>
+    <button class="btn-load-more" id="loadMoreBtn" onclick="loadMore()" style="display:none"></button>
+  </div>
+
+  <!-- Global pane -->
+  <div class="pane" id="pane-global">
+    <div class="stat-cards" style="grid-template-columns:1fr 1fr;max-width:300px;margin-left:auto;margin-right:auto;margin-bottom:16px;">
+      <div class="stat-card">
+        <div class="sc-icon">🌍</div>
+        <div class="sc-val" id="gc-total" style="color:#4ade80">—</div>
+        <div class="sc-lbl">All Time Focus</div>
+      </div>
+      <div class="stat-card">
+        <div class="sc-icon">⚡</div>
+        <div class="sc-val" id="gc-today" style="color:#facc15">—</div>
+        <div class="sc-lbl">Today (Global)</div>
+      </div>
+
+    </div>
+
+    <div class="chart-box">
+      <div class="chart-header">
+        <div class="chart-title">Cumulative Minutes</div>
+        <div class="chart-sub">all scholars · all time</div>
+      </div>
+      <div id="globalChartWrap">
+        <div class="chart-empty" id="globalChartEmpty">Chart builds as scholars log sessions...</div>
+        <canvas id="globalChart" height="120" style="display:none"></canvas>
+      </div>
+    </div>
+
+    <div id="globalDayList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Storage ────────────────────────────────────────────────────────────────────
+const LIFETIME_KEY = 'focus_lifetime_minutes';
+const SESSIONS_KEY = 'focus_sessions';
+
+function getLifetime() { return parseInt(localStorage.getItem(LIFETIME_KEY)||'0',10); }
+function saveLifetime(m) { localStorage.setItem(LIFETIME_KEY,String(m)); }
+function getSessions() { try { return JSON.parse(localStorage.getItem(SESSIONS_KEY)||'[]'); } catch { return []; } }
+function saveSessions(s) { localStorage.setItem(SESSIONS_KEY,JSON.stringify(s)); }
+
+// ── JSONBin config — fill these in ────────────────────────────────────────────
+const JSONBIN_BIN_ID  = 'YOUR_BIN_ID_HERE';
+const JSONBIN_API_KEY = 'YOUR_API_KEY_HERE';
+const JSONBIN_URL     = `https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`;
+
+async function fetchGlobalData() {
+  try {
+    const r = await fetch(JSONBIN_URL+'/latest', {
+      headers: { 'X-Master-Key': JSONBIN_API_KEY }
+    });
+    const json = await r.json();
+    return json.record || { total: 0, days: {} };
+  } catch { return { total: 0, days: {} }; }
+}
+
+async function getGlobalTotal() {
+  const data = await fetchGlobalData();
+  return data.total || 0;
+}
+
+async function getGlobalDays() {
+  const data = await fetchGlobalData();
+  return data.days || {};
+}
+
+async function addGlobal(mins) {
+  try {
+    const data = await fetchGlobalData();
+    const today = new Date().toISOString().slice(0,10);
+    data.total = (data.total || 0) + mins;
+    data.days[today] = (data.days[today] || 0) + mins;
+    await fetch(JSONBIN_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_API_KEY
+      },
+      body: JSON.stringify(data)
+    });
+  } catch {}
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function fmtMins(m) {
+  if (!m) return '0m';
+  if (m < 60) return m+'m';
+  const h=Math.floor(m/60),r=m%60;
+  return r ? h+'h '+r+'m' : h+'h';
+}
+function fmtTime(s) { return Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0'); }
+function isToday(ts) { const d=new Date(ts),t=new Date(); return d.getDate()===t.getDate()&&d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear(); }
+function todayKey() { return new Date().toISOString().slice(0,10); }
+
+const QUOTES = [
+  'Concentrate all your thoughts upon the work at hand.',
+  'Deep work is the ability to focus without distraction.',
+  'One hour of concentrated effort equals three of distracted labor.',
+  'Silence is the sleep that nourishes wisdom.',
+  'Focus is not about saying yes — it\'s about saying no.',
+];
+
+function getStatus(pct) {
+  if (pct<=0)   return {label:'',      color:'#94a3b8'};
+  if (pct<0.33) return {label:'Warming',   color:'#4ade80'};
+  if (pct<0.66) return {label:'Deep Work', color:'#facc15'};
+  return              {label:'Final Push', color:'#fb923c'};
+}
+
+// ── Timer state ────────────────────────────────────────────────────────────────
+let isRunning = false, isPaused = false;
+let totalSecs = 0, remaining = 0, sessionFocused = 0;
+let interval = null;
+let sessions = getSessions();
+let lifetime = getLifetime();
+let sessionShowAll = false;
+
+// ── SVG arc ────────────────────────────────────────────────────────────────────
+const CIRC = 2 * Math.PI * 88;
+const ARC  = CIRC * 0.82;
+const ARC_OFF = -(CIRC * 0.09);
+
+function setProgress(pct) {
+  const filled = ARC * pct;
+  const prog = document.getElementById('progressCircle');
+  prog.setAttribute('stroke-dasharray', filled+' '+(CIRC-filled));
+}
+
+function updateGaugeStatus(pct) {
+  const st = getStatus(pct);
+  const prog = document.getElementById('progressCircle');
+  prog.setAttribute('stroke', st.color);
+  prog.style.filter = `drop-shadow(0 0 10px ${st.color}99)`;
+  document.getElementById('gaugeLabel').style.color = st.color;
+  document.getElementById('gaugeLabel').textContent = st.label;
+  // ambient glow
+  document.getElementById('ambient').style.background =
+    isRunning
+      ? `radial-gradient(circle, ${st.color}11 0%, transparent 70%)`
+      : 'radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%)';
+}
+
+// ── Start timer ────────────────────────────────────────────────────────────────
+function startTimer(mins) {
+  closePicker();
+  totalSecs = mins * 60;
+  remaining = totalSecs;
+  isRunning = true; isPaused = false;
+  sessionFocused = 0;
+
+  document.getElementById('gaugeWrap').style.cursor = 'default';
+  document.getElementById('quickCards').style.display = 'none';
+  document.getElementById('customOpenBtn').style.display = 'none';
+  document.getElementById('pickerBox').style.display = 'none';
+  document.getElementById('controls').style.visibility = 'visible';
+  document.getElementById('runningQuote').style.display = 'block';
+  document.getElementById('runningQuote').textContent = QUOTES[Math.floor(Date.now()/86400000)%QUOTES.length];
+  document.getElementById('gaugeSub').textContent = 'remaining';
+  document.getElementById('gaugeTime').style.color = '#fff';
+
+  tick();
+  interval = setInterval(tick, 1000);
+}
+
+function startCustom() {
+  const v = parseInt(document.getElementById('customInput').value, 10);
+  if (v > 0 && v <= 480) startTimer(v);
+}
+
+function tick() {
+  if (isPaused) return;
+  if (remaining > 0) {
+    remaining--;
+    sessionFocused++;
+  }
+  const elapsed = 1 - remaining / totalSecs;
+  setProgress(elapsed);
+  updateGaugeStatus(elapsed);
+  document.getElementById('gaugeTime').textContent = fmtTime(remaining);
+  const _todayMins = sessions.filter(s=>isToday(s.timestamp)).reduce((a,s)=>a+s.duration,0);
+  document.getElementById('stripToday').textContent = fmtMins(_todayMins);
+  if (remaining <= 0) { clearInterval(interval); finishSession(Math.round(totalSecs/60), true); }
+}
+
+function togglePause() {
+  isPaused = !isPaused;
+  document.getElementById('pauseBtn').textContent = isPaused ? 'Resume' : 'Pause';
+  document.getElementById('gaugeSub').textContent = isPaused ? 'paused' : 'remaining';
+  document.getElementById('gaugeLabel').textContent = isPaused ? 'Paused' : getStatus(1 - remaining/totalSecs).label;
+}
+
+function endEarly() {
+  clearInterval(interval);
+  const elapsed = Math.floor((totalSecs - remaining) / 60);
+  if (elapsed > 0) finishSession(elapsed, false);
+  else resetUI();
+}
+
+async function finishSession(mins, completed) {
+  lifetime += mins; saveLifetime(lifetime);
+  await addGlobal(mins);
+  sessions = [{ duration: mins, timestamp: Date.now(), completed }, ...sessions.slice(0,99)];
+  saveSessions(sessions);
+  showToast(completed ? '🎯 Complete! +'+mins+'m logged' : '✓ +'+mins+'m saved');
+  resetUI();
+  renderMyStats();
+  renderGlobalStats();
+}
+
+function resetUI() {
+  isRunning = false; isPaused = false;
+  totalSecs = 0; remaining = 0;
+  clearInterval(interval);
+
+  document.getElementById('gaugeWrap').style.cursor = 'pointer';
+  document.getElementById('gaugeTime').textContent = '—';
+  document.getElementById('gaugeTime').style.color = 'rgba(255,255,255,0.25)';
+  document.getElementById('gaugeSub').textContent = 'tap to start';
+  document.getElementById('gaugeLabel').textContent = '';
+  setProgress(0);
+  updateGaugeStatus(0);
+  document.getElementById('controls').style.visibility = 'hidden';
+  document.getElementById('quickCards').style.display = 'flex';
+  document.getElementById('customOpenBtn').style.display = 'block';
+  document.getElementById('runningQuote').style.display = 'none';
+  document.getElementById('pauseBtn').textContent = 'Pause';
+}
+
+function handleGaugeClick() {
+  if (!isRunning) openPicker();
+}
+
+function openPicker() {
+  document.getElementById('pickerBox').style.display = 'block';
+  document.getElementById('customOpenBtn').style.display = 'none';
+  document.getElementById('quickCards').style.display = 'none';
+  setTimeout(() => document.getElementById('customInput').focus(), 50);
+}
+function closePicker() {
+  document.getElementById('pickerBox').style.display = 'none';
+  if (!isRunning) {
+    document.getElementById('customOpenBtn').style.display = 'block';
+    document.getElementById('quickCards').style.display = 'flex';
+  }
+}
+
+// ── Tabs ────────────────────────────────────────────────────────────────────────
+function switchTab(id, btn) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pane-'+id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'global') renderGlobalStats();
+}
+
+// ── My Stats ───────────────────────────────────────────────────────────────────
+let personalChart = null;
+
+function renderMyStats() {
+  const todayMins = sessions.filter(s=>isToday(s.timestamp)).reduce((a,s)=>a+s.duration,0);
+  const avg = sessions.length ? Math.round(sessions.reduce((a,s)=>a+s.duration,0)/sessions.length) : 0;
+
+  document.getElementById('sc-lifetime').textContent = fmtMins(lifetime);
+  document.getElementById('sc-today').textContent = fmtMins(todayMins);
+  document.getElementById('sc-sessions').textContent = sessions.length || '—';
+  document.getElementById('sc-avg').textContent = avg ? fmtMins(avg) : '—';
+  document.getElementById('stripLifetime').textContent = fmtMins(lifetime);
+  document.getElementById('stripToday').textContent = fmtMins(todayMins);
+
+  // 14-day chart
+  const dailyMap = {};
+  sessions.forEach(s => { const k=new Date(s.timestamp).toISOString().slice(0,10); dailyMap[k]=(dailyMap[k]||0)+s.duration; });
+  const labels=[], data=[];
+  for (let i=13;i>=0;i--) {
+    const d=new Date(); d.setDate(d.getDate()-i);
+    const k=d.toISOString().slice(0,10);
+    labels.push(d.toLocaleDateString([],{month:'short',day:'numeric'}));
+    data.push(dailyMap[k]||0);
+  }
+
+  const ctx = document.getElementById('personalChart').getContext('2d');
+  if (personalChart) personalChart.destroy();
+  personalChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        data, fill: true, tension: 0.4,
+        borderColor: '#facc15', borderWidth: 1.5, pointRadius: 0,
+        backgroundColor: (ctx) => {
+          const g = ctx.chart.ctx.createLinearGradient(0,0,0,90);
+          g.addColorStop(0,'rgba(250,204,21,0.3)'); g.addColorStop(1,'rgba(250,204,21,0)');
+          return g;
+        }
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        backgroundColor: 'rgba(20,20,35,0.95)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+        titleColor: 'rgba(255,255,255,0.5)', bodyColor: '#facc15',
+        callbacks: { label: ctx => ctx.parsed.y+'m focused' }
+      }},
+      scales: {
+        x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.25)', font: { size: 9 }, maxTicksLimit: 5 }, border: { display: false } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.2)', font: { size: 9 } }, border: { display: false } }
+      }
+    }
+  });
+
+  // Session list
+  renderSessionList();
+}
+
+function renderSessionList() {
+  const list = document.getElementById('sessionList');
+  const loadBtn = document.getElementById('loadMoreBtn');
+  const visible = sessionShowAll ? sessions : sessions.slice(0,7);
+  list.innerHTML = '';
+  if (!sessions.length) { list.innerHTML = '<div class="empty-msg">No sessions yet 🎯</div>'; loadBtn.style.display='none'; return; }
+  visible.forEach(s => {
+    const d = new Date(s.timestamp);
+    const el = document.createElement('div');
+    el.className = 'session-entry';
+    const pct = Math.min((s.duration/90)*100,100);
+    el.innerHTML = `
+      <div class="se-icon ${s.completed?'complete':'partial'}">${s.completed?'🎯':'⏱'}</div>
+      <div class="se-body">
+        <div class="se-top">
+          <span class="se-name">${s.duration}m ${s.completed?'completed':'partial'}</span>
+          <span class="se-time">${d.toLocaleDateString([],{month:'short',day:'numeric'})} · ${d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+        </div>
+        <div class="se-bar-track"><div class="se-bar-fill ${s.completed?'complete':'partial'}" style="width:${pct}%"></div></div>
+      </div>`;
+    list.appendChild(el);
+  });
+  if (sessions.length > 7) {
+    loadBtn.style.display = 'block';
+    loadBtn.textContent = sessionShowAll ? 'Show less ↑' : `Load all ${sessions.length} sessions ↓`;
+  } else { loadBtn.style.display='none'; }
+}
+
+function loadMore() { sessionShowAll = !sessionShowAll; renderSessionList(); }
+
+// ── Global Stats ───────────────────────────────────────────────────────────────
+let globalChart = null;
+
+async function renderGlobalStats() {
+  const [total, days] = await Promise.all([getGlobalTotal(), getGlobalDays()]);
+  const today = todayKey();
+  const globalToday = days[today]||0;
+  const sortedDays = Object.keys(days).sort();
+  const maxD = sortedDays.length ? Math.max(...Object.values(days)) : 0;
+
+  document.getElementById('gc-total').textContent = fmtMins(total);
+  document.getElementById('gc-today').textContent = fmtMins(globalToday);
+
+  // Cumulative chart
+  if (sortedDays.length >= 1) {
+    document.getElementById('globalChartEmpty').style.display = 'none';
+    const gc = document.getElementById('globalChart');
+    gc.style.display = 'block';
+    let cum = 0;
+    const labels=[], data=[], dailyData=[];
+    sortedDays.forEach(k => {
+      cum += days[k];
+      labels.push(new Date(k).toLocaleDateString([],{month:'short',day:'numeric'}));
+      data.push(cum);
+      dailyData.push(days[k]);
+    });
+    const ctx = gc.getContext('2d');
+    if (globalChart) globalChart.destroy();
+    globalChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: 'cumulative', data, fill: true, tension: 0.4,
+          borderColor: '#4ade80', borderWidth: 2, pointRadius: 0,
+          backgroundColor: (ctx) => {
+            const g = ctx.chart.ctx.createLinearGradient(0,0,0,120);
+            g.addColorStop(0,'rgba(74,222,128,0.25)'); g.addColorStop(1,'rgba(74,222,128,0)');
+            return g;
+          }
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: {
+          backgroundColor: 'rgba(20,20,35,0.95)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+          titleColor: 'rgba(255,255,255,0.5)', bodyColor: '#4ade80',
+          callbacks: { label: ctx => fmtMins(ctx.parsed.y) }
+        }},
+        scales: {
+          x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.25)', font: { size: 9 }, maxTicksLimit: 6 }, border: { display: false } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.2)', font: { size: 9 }, callback: v => v>=60?Math.round(v/60)+'h':v }, border: { display: false } }
+        }
+      }
+    });
+  }
+
+  // Daily breakdown
+  const dayList = document.getElementById('globalDayList');
+  dayList.innerHTML = '';
+  if (sortedDays.length) {
+    const lbl = document.createElement('div'); lbl.className='section-label'; lbl.textContent='Daily Breakdown'; dayList.appendChild(lbl);
+    [...sortedDays].reverse().slice(0,14).forEach(k => {
+      const pct = maxD>0 ? (days[k]/maxD)*100 : 0;
+      const row = document.createElement('div'); row.className='day-row';
+      row.innerHTML = `<div class="day-date">${new Date(k).toLocaleDateString([],{month:'short',day:'numeric'})}</div><div class="day-track"><div class="day-fill" style="width:${pct}%"></div></div><div class="day-val">${fmtMins(days[k])}</div>`;
+      dayList.appendChild(row);
+    });
+  }
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+setProgress(0); updateGaugeStatus(0);
+renderMyStats();
+renderGlobalStats();
+</script>
+</body>
+</html>
