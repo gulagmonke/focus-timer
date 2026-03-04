@@ -167,9 +167,11 @@ body { min-height: 100vh; background: linear-gradient(160deg, #0f0f1a 0%, #12101
   </div>
 
   <div class="pane" id="pane-global">
-    <div class="stat-cards" style="grid-template-columns:1fr 1fr;max-width:300px;margin-left:auto;margin-right:auto;margin-bottom:16px;">
+    <div class="stat-cards" style="margin-bottom:16px;">
       <div class="stat-card"><div class="sc-icon">🌍</div><div class="sc-val" id="gc-total" style="color:#4ade80">—</div><div class="sc-lbl">All Time Focus</div></div>
       <div class="stat-card"><div class="sc-icon">⚡</div><div class="sc-val" id="gc-today" style="color:#facc15">—</div><div class="sc-lbl">Today (Global)</div></div>
+      <div class="stat-card"><div class="sc-icon">🎯</div><div class="sc-val" id="gc-sessions" style="color:#a78bfa">—</div><div class="sc-lbl">Sessions</div></div>
+      <div class="stat-card"><div class="sc-icon">📊</div><div class="sc-val" id="gc-avg" style="color:#fb923c">—</div><div class="sc-lbl">Avg Session</div></div>
     </div>
     <div class="chart-box">
       <div class="chart-header">
@@ -405,6 +407,9 @@ async function renderGlobalStats() {
 
   document.getElementById('gc-total').textContent = fmtMins(total);
   document.getElementById('gc-today').textContent = fmtMins(globalToday);
+  document.getElementById('gc-sessions').textContent = globalSessionsCache.length || '—';
+  const globalAvg = globalSessionsCache.length ? Math.round(globalSessionsCache.reduce((a,s)=>a+s.duration,0) / globalSessionsCache.length) : 0;
+  document.getElementById('gc-avg').textContent = globalAvg ? fmtMins(globalAvg) : '—';
 
   if (sortedDays.length >= 1) {
     document.getElementById('globalChartEmpty').style.display='none';
