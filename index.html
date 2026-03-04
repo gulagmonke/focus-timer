@@ -200,18 +200,21 @@ async function fetchGlobalData() {
   try {
     const r = await fetch(FIREBASE_URL + '/global.json');
     const data = await r.json();
-    return data || { total: 0, days: {} };
-  } catch { return { total: 0, days: {} }; }
+    return data || { total: 0, days: {}, sessions: [] };
+  } catch { return { total: 0, days: {}, sessions: [] }; }
 }
 async function getGlobalTotal() { return (await fetchGlobalData()).total || 0; }
 async function getGlobalDays()  { return (await fetchGlobalData()).days  || {}; }
-async function addGlobal(mins) {
+async function getGlobalSessions() { return (await fetchGlobalData()).sessions || []; }
+async function addGlobal(mins, completed) {
   try {
     const data = await fetchGlobalData();
     const today = new Date().toISOString().slice(0,10);
     data.total = (data.total||0) + mins;
     data.days  = data.days || {};
     data.days[today] = (data.days[today]||0) + mins;
+    data.sessions = data.sessions || [];
+    data.sessions.unshift({ duration: mins, timestamp: Date.now(), completed });
     await fetch(FIREBASE_URL + '/global.json', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -304,7 +307,7 @@ function endEarly() {
 
 async function finishSession(mins,completed) {
   lifetime+=mins; saveLifetime(lifetime);
-  await addGlobal(mins);
+  await addGlobal(mins, completed);
   sessions=[{duration:mins,timestamp:Date.now(),completed},...sessions.slice(0,99)];
   saveSessions(sessions);
   showToast(completed ? '🎯 Complete! +'+mins+'m logged' : '✓ +'+mins+'m saved');
@@ -390,37 +393,68 @@ function renderSessionList() {
 }
 function loadMore(){sessionShowAll=!sessionShowAll;renderSessionList();}
 
-let globalChart=null;
 async function renderGlobalStats() {
-  const [total,days]=await Promise.all([getGlobalTotal(),getGlobalDays()]);
-  const today=todayKey(),globalToday=days[today]||0;
-  const sortedDays=Object.keys(days).sort(),maxD=sortedDays.length?Math.max(...Object.values(days)):0;
-  document.getElementById('gc-total').textContent=fmtMins(total);
-  document.getElementById('gc-today').textContent=fmtMins(globalToday);
-  if (sortedDays.length>=1) {
+  const data = await fetchGlobalData();
+  const total = data.total || 0;
+  const days  = data.days  || {};
+  const today = todayKey(), globalToday = days[today]||0;
+  const sortedDays = Object.keys(days).sort();
+  const maxD = sortedDays.length ? Math.max(...Object.values(days)) : 0;
+
+  globalSessionsCache = data.sessions || [];
+
+  document.getElementById('gc-total').textContent = fmtMins(total);
+  document.getElementById('gc-today').textContent = fmtMins(globalToday);
+
+  if (sortedDays.length >= 1) {
     document.getElementById('globalChartEmpty').style.display='none';
     document.getElementById('globalChartCanvas').style.display='block';
-    let cum=0;const labels=[],data=[];
-    sortedDays.forEach(k=>{cum+=days[k];labels.push(new Date(k).toLocaleDateString([],{month:'short',day:'numeric'}));data.push(cum);});
+    let cum=0; const labels=[],cdata=[];
+    sortedDays.forEach(k=>{cum+=days[k];labels.push(new Date(k).toLocaleDateString([],{month:'short',day:'numeric'}));cdata.push(cum);});
     const ctx=document.getElementById('globalChart').getContext('2d');
     if (globalChart) globalChart.destroy();
     globalChart=new Chart(ctx,{
       type:'line',
-      data:{labels,datasets:[{label:'cumulative',data,fill:true,tension:0.4,borderColor:'#4ade80',borderWidth:2,pointRadius:0,
+      data:{labels,datasets:[{label:'cumulative',data:cdata,fill:true,tension:0.4,borderColor:'#4ade80',borderWidth:2,pointRadius:0,
         backgroundColor:(ctx)=>{const g=ctx.chart.ctx.createLinearGradient(0,0,0,120);g.addColorStop(0,'rgba(74,222,128,0.25)');g.addColorStop(1,'rgba(74,222,128,0)');return g;}}]},
       options:{responsive:true,maintainAspectRatio:false,
         plugins:{legend:{display:false},tooltip:{backgroundColor:'rgba(20,20,35,0.95)',borderColor:'rgba(255,255,255,0.1)',borderWidth:1,titleColor:'rgba(255,255,255,0.5)',bodyColor:'#4ade80',callbacks:{label:ctx=>fmtMins(ctx.parsed.y)}}},
         scales:{x:{grid:{display:false},ticks:{color:'rgba(255,255,255,0.25)',font:{size:9},maxTicksLimit:6},border:{display:false}},y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'rgba(255,255,255,0.2)',font:{size:9},callback:v=>v>=60?Math.round(v/60)+'h':v},border:{display:false}}}}
     });
   }
-  const dayList=document.getElementById('globalDayList');dayList.innerHTML='';
-  if (sortedDays.length) {
-    const lbl=document.createElement('div');lbl.className='section-label';lbl.textContent='Daily Breakdown';dayList.appendChild(lbl);
-    [...sortedDays].reverse().slice(0,14).forEach(k=>{
-      const pct=maxD>0?(days[k]/maxD)*100:0,row=document.createElement('div');row.className='day-row';
-      row.innerHTML=`<div class="day-date">${new Date(k).toLocaleDateString([],{month:'short',day:'numeric'})}</div><div class="day-track"><div class="day-fill" style="width:${pct}%"></div></div><div class="day-val">${fmtMins(days[k])}</div>`;
-      dayList.appendChild(row);
-    });
+
+  renderGlobalSessionList();
+}
+
+function renderGlobalSessionList() {
+  const container = document.getElementById('globalDayList');
+  container.innerHTML = '';
+
+  if (!globalSessionsCache.length) {
+    container.innerHTML = '<div class="empty-msg">No sessions logged yet 🌍</div>';
+    return;
+  }
+
+  const lbl = document.createElement('div');
+  lbl.className = 'section-label';
+  lbl.textContent = 'Session History';
+  container.appendChild(lbl);
+
+  const visible = globalSessionShowAll ? globalSessionsCache : globalSessionsCache.slice(0, 7);
+  visible.forEach(s => {
+    const d = new Date(s.timestamp), el = document.createElement('div');
+    el.className = 'session-entry';
+    const pct = Math.min((s.duration / 90) * 100, 100);
+    el.innerHTML = `<div class="se-icon ${s.completed?'complete':'partial'}">${s.completed?'🎯':'⏱'}</div><div class="se-body"><div class="se-top"><span class="se-name">${s.duration}m ${s.completed?'completed':'partial'}</span><span class="se-time">${d.toLocaleDateString([],{month:'short',day:'numeric'})} · ${d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span></div><div class="se-bar-track"><div class="se-bar-fill ${s.completed?'complete':'partial'}" style="width:${pct}%"></div></div></div>`;
+    container.appendChild(el);
+  });
+
+  if (globalSessionsCache.length > 7) {
+    const btn = document.createElement('button');
+    btn.className = 'btn-load-more';
+    btn.textContent = globalSessionShowAll ? 'Show less ↑' : `Load all ${globalSessionsCache.length} sessions ↓`;
+    btn.onclick = () => { globalSessionShowAll = !globalSessionShowAll; renderGlobalSessionList(); };
+    container.appendChild(btn);
   }
 }
 
