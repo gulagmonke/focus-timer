@@ -396,9 +396,11 @@ async function renderGlobalStats() {
   const today = todayKey(), globalToday = days[today] || 0;
 
   const rawSessions = data.sessions || [];
+  console.log('raw sessions from Firebase:', JSON.stringify(rawSessions));
   globalSessionsCache = Array.isArray(rawSessions)
     ? rawSessions
     : Object.values(rawSessions).sort((a,b) => b.timestamp - a.timestamp);
+  console.log('globalSessionsCache after normalize:', globalSessionsCache);
 
   document.getElementById('gc-total').textContent = fmtMins(total);
   document.getElementById('gc-today').textContent = fmtMins(globalToday);
