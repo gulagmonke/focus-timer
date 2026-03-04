@@ -546,6 +546,7 @@ async function updateLeaderboard(mins) {
 }
 
 let lbCountdownInterval = null;
+let lbVisible = 10;
 
 function startLbCountdown() {
   if (lbCountdownInterval) clearInterval(lbCountdownInterval);
