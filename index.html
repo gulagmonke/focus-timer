@@ -510,7 +510,7 @@ function playDone() {
 const LB_NAME_KEY = 'focus_lb_name';
 const LB_UID_KEY  = 'focus_lb_uid';
 
-function getLbName() { return localStorage.getItem(LB_NAME_KEY) || ''; }
+function getLbName() { return localStorage.getItem(LB_NAME_KEY) || getLbUid(); }
 function getLbUid()  {
   let uid = localStorage.getItem(LB_UID_KEY);
   if (!uid) { uid = 'u_' + Math.random().toString(36).slice(2,10); localStorage.setItem(LB_UID_KEY, uid); }
@@ -549,7 +549,6 @@ async function fetchLeaderboardData() {
 
 async function updateLeaderboard(mins) {
   const name = getLbName();
-  if (!name) return;
   const uid = getLbUid();
   const today = todayKey();
   try {
