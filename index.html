@@ -240,7 +240,7 @@ async function getGlobalSessions() { return (await fetchGlobalData()).sessions |
 async function addGlobal(mins, completed) {
   try {
     const data = await fetchGlobalData();
-    const today = new Date().toISOString().slice(0,10);
+    const today = nyDateKey();
     data.total = (data.total||0) + mins;
     data.days  = data.days || {};
     data.days[today] = (data.days[today]||0) + mins;
@@ -257,8 +257,11 @@ async function addGlobal(mins, completed) {
 
 function fmtMins(m) { if (!m) return '0m'; if (m<60) return m+'m'; const h=Math.floor(m/60),r=m%60; return r ? h+'h '+r+'m' : h+'h'; }
 function fmtTime(s) { return Math.floor(s/60)+':'+(s%60).toString().padStart(2,'0'); }
-function isToday(ts) { return new Date(ts).toISOString().slice(0,10) === todayKey(); }
-function todayKey() { return new Date().toISOString().slice(0,10); }
+function nyDateKey(date) {
+  return (date||new Date()).toLocaleDateString('en-CA', { timeZone:'America/New_York' });
+}
+function isToday(ts) { return nyDateKey(new Date(ts)) === nyDateKey(); }
+function todayKey() { return nyDateKey(); }
 function getStatus(pct) {
   if (pct<=0)   return {label:'',          color:'#94a3b8'};
   if (pct<0.33) return {label:'Warming',   color:'#4ade80'};
@@ -395,9 +398,9 @@ function renderMyStats() {
   document.getElementById('stripLifetime').textContent=fmtMins(lifetime);
   document.getElementById('stripToday').textContent=fmtMins(todayMins);
   const dailyMap={};
-  sessions.forEach(s=>{const k=new Date(s.timestamp).toISOString().slice(0,10);dailyMap[k]=(dailyMap[k]||0)+s.duration;});
+  sessions.forEach(s=>{const k=nyDateKey(new Date(s.timestamp));dailyMap[k]=(dailyMap[k]||0)+s.duration;});
   const labels=[],data=[];
-  for (let i=13;i>=0;i--) { const d=new Date();d.setDate(d.getDate()-i);const k=d.toISOString().slice(0,10);labels.push(d.toLocaleDateString([],{month:'short',day:'numeric',year:'numeric'}));data.push(dailyMap[k]||0); }
+  for (let i=13;i>=0;i--) { const d=new Date();d.setDate(d.getDate()-i);const k=nyDateKey(d);labels.push(d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric',timeZone:'America/New_York'}));data.push(dailyMap[k]||0); }
   const ctx=document.getElementById('personalChart').getContext('2d');
   if (personalChart) personalChart.destroy();
   personalChart=new Chart(ctx,{
@@ -550,10 +553,9 @@ let lbVisible = 10;
 function startLbCountdown() {
   if (lbCountdownInterval) clearInterval(lbCountdownInterval);
   function update() {
-    const now = new Date();
-    const midnightUTC = new Date();
-    midnightUTC.setUTCHours(24, 0, 0, 0);
-    const diff = Math.max(0, Math.floor((midnightUTC - now) / 1000));
+    const nyTimeStr = new Date().toLocaleTimeString('en-US', {timeZone:'America/New_York', hour12:false, hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    const [hh,mm,ss] = nyTimeStr.split(':').map(Number);
+    const diff = Math.max(0, 86400 - (hh*3600 + mm*60 + ss));
     const h = Math.floor(diff / 3600);
     const m = Math.floor((diff % 3600) / 60);
     const s = diff % 60;
@@ -574,7 +576,7 @@ async function renderLeaderboard() {
 
   // Set date label
   document.getElementById('lbDateLabel').textContent =
-    new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric', timeZone:'UTC' });
+    new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric', timeZone:'America/New_York' }) + ' (ET)';
 
   // Pre-fill name input
   const nameInput = document.getElementById('lbNameInput');
