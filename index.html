@@ -517,9 +517,26 @@ function getLbUid()  {
   return uid;
 }
 
+let lbNameDebounce = null;
 function saveLbName() {
   const val = document.getElementById('lbNameInput').value.trim().slice(0,24);
   localStorage.setItem(LB_NAME_KEY, val);
+  if (!val) return;
+  clearTimeout(lbNameDebounce);
+  lbNameDebounce = setTimeout(() => {
+    const uid = getLbUid();
+    const today = todayKey();
+    fetch(`${FIREBASE_URL}/leaderboard/${today}/${uid}.json`)
+      .then(r=>r.json()).then(existing=>{
+        if (existing && existing.mins) {
+          fetch(`${FIREBASE_URL}/leaderboard/${today}/${uid}.json`, {
+            method: 'PUT',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({...existing, name: val})
+          }).then(()=>renderLeaderboard());
+        }
+      }).catch(()=>{});
+  }, 800);
 }
 
 async function fetchLeaderboardData() {
@@ -533,16 +550,16 @@ async function fetchLeaderboardData() {
 async function updateLeaderboard(mins) {
   const name = getLbName();
   if (!name) return;
+  const uid = getLbUid();
   const today = todayKey();
-  const nameKey = name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,24);
   try {
-    const r = await fetch(`${FIREBASE_URL}/leaderboard/${today}/${nameKey}.json`);
+    const r = await fetch(`${FIREBASE_URL}/leaderboard/${today}/${uid}.json`);
     const existing = await r.json();
     const current = (existing && existing.mins) ? existing.mins : 0;
-    await fetch(`${FIREBASE_URL}/leaderboard/${today}/${nameKey}.json`, {
+    await fetch(`${FIREBASE_URL}/leaderboard/${today}/${uid}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, mins: current + mins, nameKey, ts: Date.now() })
+      body: JSON.stringify({ name, mins: current + mins, uid, ts: Date.now() })
     });
   } catch {}
 }
